@@ -106,15 +106,35 @@ else
     echo "⚪️ 未选择 luci-app-ssr-plus"
 fi
 
-# 构建镜像
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Building image with the following packages:"
-echo "$PACKAGES"
+# 构建镜像，并保存完整日志
+set -o pipefail
 
-make image PROFILE="generic" PACKAGES="$PACKAGES" FILES="/home/build/immortalwrt/files" ROOTFS_PARTSIZE=$PROFILE
+BUILD_LOG="/tmp/imagebuilder.log"
 
-if [ $? -ne 0 ]; then
+make image \
+    PROFILE="generic" \
+    PACKAGES="$PACKAGES" \
+    FILES="/home/build/immortalwrt/files" \
+    ROOTFS_PARTSIZE=$PROFILE \
+    2>&1 | tee "$BUILD_LOG"
+
+BUILD_STATUS=${PIPESTATUS[0]}
+
+if [ $BUILD_STATUS -ne 0 ]; then
+    echo ""
+    echo "=================================================="
+    echo "❌ Build failed - APK error summary"
+    echo "=================================================="
+
+    grep -n \
+        -B 5 \
+        -A 8 \
+        -E 'ERROR:|trying to overwrite|unable to select packages|breaks:|conflicts:|Cannot install' \
+        "$BUILD_LOG" || true
+
+    echo "=================================================="
     echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Build failed!"
-    exit 1
+    exit $BUILD_STATUS
 fi
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Build completed successfully."
